@@ -1,3 +1,4 @@
+# ATM with SQL integration
 import random
 import string
 import sqlite3
@@ -31,14 +32,16 @@ class Customer:
         return self.balance
 
     # generate random 15 digit customer number
-    def number(self):
+    @staticmethod
+    def number():
         customer_no = ""
         for i in range(15):
             customer_no += random.choice(numbers)
         return customer_no
 
     # generate random pin
-    def pin(self):
+    @staticmethod
+    def pin():
         pin_no = ""
         for i in range(4):
             pin_no += random.choice(numbers)
@@ -49,7 +52,8 @@ class Customer:
 
     class Card:
         # generate random 16 digit card number with a space after evey four digits, apart from after 16th
-        def number(self):
+        @staticmethod
+        def number():
             card_no = []
             for i in range(1, 17):
                 card_no.append(random.choice(numbers))
@@ -58,7 +62,8 @@ class Customer:
             return "".join(card_no)
 
         # generate current date using datetime in format mm/yy
-        def start(self):
+        @staticmethod
+        def start():
             date_now = datetime.datetime.now()
             start_month = date_now.strftime("%m")
             start_year = date_now.strftime("%y")
@@ -66,7 +71,8 @@ class Customer:
             return start_date
 
         # generate date four years from now in format mm/yy
-        def expire(self):
+        @staticmethod
+        def expire():
             date_now = datetime.datetime.now()
             start_month = date_now.strftime("%m")
             start_year = date_now.strftime("%y")
