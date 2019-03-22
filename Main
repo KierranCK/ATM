@@ -1,0 +1,347 @@
+import random
+import string
+import sqlite3
+import datetime
+
+numbers = string.digits
+
+
+class Customer:
+    def __init__(self, first_name, last_name, balance=0.00):
+        self.first_name = first_name
+        self.last_name = last_name
+        self.balance = balance
+        self.name = first_name + last_name
+        self.card = self.Card()
+
+    def withdraw(self, amount):
+        if amount > self.balance:
+            print("Insufficient Funds\nYou are attempting to withdraw £"
+                  + str(amount) + " however, only £" + str(self.balance)
+                  + " is available for withdrawal.")
+        else:
+            self.balance -= amount
+            return self.balance
+
+    def deposit(self, amount):
+        self.balance += amount
+        return self.balance
+
+    def get_balance(self):
+        return self.balance
+
+    # generate random 15 digit customer number
+    def number(self):
+        customer_no = ""
+        for i in range(15):
+            customer_no += random.choice(numbers)
+        return customer_no
+
+    # generate random pin
+    def pin(self):
+        pin_no = ""
+        for i in range(4):
+            pin_no += random.choice(numbers)
+        return pin_no
+
+    def __str__(self):
+        return self.name
+
+    class Card:
+        # generate random 16 digit card number with a space after evey four digits, apart from after 16th
+        def number(self):
+            card_no = []
+            for i in range(1, 17):
+                card_no.append(random.choice(numbers))
+                if i % 4 == 0 and i != 16:
+                    card_no.append(" ")
+            return "".join(card_no)
+
+        # generate current date using datetime in format mm/yy
+        def start(self):
+            date_now = datetime.datetime.now()
+            start_month = date_now.strftime("%m")
+            start_year = date_now.strftime("%y")
+            start_date = start_month + "/" + start_year
+            return start_date
+
+        # generate date four years from now in format mm/yy
+        def expire(self):
+            date_now = datetime.datetime.now()
+            start_month = date_now.strftime("%m")
+            start_year = date_now.strftime("%y")
+            exp_date = start_month + "/" + str(int(start_year) + 4)
+            return exp_date
+
+
+def sign_up():
+    first_name = input("First name: ")
+    last_name = input("Last name: ")
+    customer = Customer(first_name, last_name)
+    card = customer.card
+    card_no = card.number()
+    start_date = card.start()
+    exp_date = card.expire()
+    customer_no = customer.number()
+    pin_no = customer.pin()
+    connection = sqlite3.connect("123_banking.db")
+    cursor = connection.cursor()
+
+    # attempt to create tables
+    try:
+        cursor.execute("""CREATE TABLE customers (  
+                               ID INTEGER PRIMARY KEY, 
+                               customer_number VARCHAR(15),
+                               first_name VARCHAR(20),
+                               last_name VARCHAR(20),
+                               card_no VARCHAR(19),
+                               start_date VARCHAR(5),
+                               exp_date VARCHAR(5),
+                               pin_number INTEGER(4),   
+                               funds INTEGER
+                               )""")
+
+        cursor.execute("""INSERT INTO customers (customer_number, first_name, last_name, card_no, start_date, exp_date,
+                                pin_number) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                       (customer_no, first_name, last_name, card_no, start_date, exp_date, pin_no))
+
+        cursor.execute("""CREATE TABLE transactions (  
+                                       pin_number INTEGER(4),   
+                                       transactions VARCHAR
+                                       )""")
+
+        cursor.execute("""INSERT INTO transactions (pin_number) VALUES (?)""", (pin_no,))
+
+        connection.commit()
+        connection.close()
+
+    # if tables already exist, do following
+    except sqlite3.OperationalError:
+        cursor.execute("""INSERT INTO customers (customer_number, first_name, last_name, card_no, start_date, exp_date, 
+                            pin_number) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                       (customer_no, first_name, last_name, card_no, start_date, exp_date, pin_no))
+
+        cursor.execute("""INSERT INTO transactions (pin_number) VALUES (?)""", (pin_no,))
+
+        connection.commit()
+        connection.close()
+
+    print("Account successfully created!\nWelcome to 123 Banking " + first_name + " " + last_name + "!")
+    print("\nYour customer number is: " + customer_no)
+    print("Your card number is: " + card_no)
+    print("Start date: " + start_date)
+    print("Expiry date: " + exp_date)
+    print("Your pin number is: " + pin_no)
+    print("Please keep your pin number safe as you'll need it to access your account.")
+
+
+# convert tuples returned by sqlite3 to list
+def tuple_sort(result):
+    return [x for i in result for x in i]
+
+
+def access():
+    attempts = 0
+    while True:
+        security = input("Please enter pin number: ")
+        connection = sqlite3.connect("123_banking.db")
+        cursor = connection.cursor()
+        cursor.execute("SELECT pin_number FROM customers")
+        result = cursor.fetchall()
+        result_list = tuple_sort(result)
+        for i in result_list:
+            if i == int(security):
+                while True:
+                    # obtaining info where pin == security
+                    cursor.execute("SELECT * FROM customers WHERE pin_number IS ?", (security,))
+                    result = cursor.fetchall()
+                    # create list from database table
+                    result_list = tuple_sort(result)
+                    # list order: id, customer_number, first_name, last_name...
+                    # first name assigned to variable first
+                    first = result_list[2]
+                    last = result_list[3]
+                    # result_list[8] is customer balance
+                    # if table cell is empty
+                    if result_list[8] is None:
+                        bal = 0.0
+                    else:
+                        bal = result_list[8]
+
+                    # creating instance of customer class with data from database
+                    customer = Customer(first, last, bal)
+
+                    input1 = input("\n1) Balance\n2) Deposit\n3) Withdraw\n4) View Transactions\n"
+                    + "5) Close Account\n6) Main Menu\n")
+                    if input1 == "1":
+                        connection = sqlite3.connect("123_banking.db")
+                        cursor = connection.cursor()
+                        cursor.execute("SELECT funds FROM customers WHERE pin_number = ?", (security,))
+                        result = cursor.fetchall()
+                        print("Your balance is: £" + str(bal))
+
+                    elif input1 == "2":
+                        print("==Deposit==")
+                        value = input("\nInput amount to be deposited: £")
+                        # calling deposit function from customer class
+                        customer.deposit(int(value))
+                        current_time = datetime.datetime.now()
+                        transaction = "£+" + value + " " + str(current_time)
+                        connection = sqlite3.connect("123_banking.db")
+                        cursor = connection.cursor()
+                        cursor.execute("UPDATE customers SET funds = ? WHERE pin_number = ? ",
+                                       (str(customer.get_balance()), security))
+                        cursor.execute("SELECT transactions FROM transactions WHERE pin_number = ?", (security,))
+                        result = cursor.fetchall()
+                        result_list = tuple_sort(result)
+                        try:
+                            transactions = "".join(result_list) + transaction
+                        except TypeError:
+                            transactions = transaction
+
+                        cursor.execute("UPDATE transactions SET transactions = ? WHERE pin_number = ?",
+                                       (transactions, security))
+                        connection.commit()
+                        print("£" + value + " has been successfully deposited.")
+                        option1 = input("View the account balance?\n1) Yes\n2) No\n")
+                        if option1 == "1":
+                            print("Account balance: £" + str(customer.get_balance()))
+                        elif option1 == "2":
+                            break
+                        else:
+                            print("Please enter a valid option.")
+
+                    elif input1 == "3":
+                        print("==Withdraw==")
+                        while True:
+                            try:
+                                value = input("\nEnter amount to be withdrawn: £")
+                                # calling withdraw function from customer class
+                                customer.withdraw(int(value))
+                                current_time = datetime.datetime.now()
+                                transaction = "£-" + value + " " + str(current_time)
+                                connection = sqlite3.connect("123_banking.db")
+                                cursor = connection.cursor()
+                                cursor.execute("UPDATE customers SET funds = ? WHERE pin_number = ? ",
+                                               (str(customer.get_balance()), security))
+
+                                cursor.execute("SELECT transactions FROM transactions WHERE pin_number = ?",
+                                               (security,))
+                                result = cursor.fetchall()
+                                # convert tuple to list
+                                result_list = tuple_sort(result)
+                                # attempt to join list of transactions
+                                try:
+                                    transactions = "".join(result_list) + transaction
+                                # if transactions is None, transactions = current transaction
+                                except TypeError:
+                                    transactions = transaction
+
+                                cursor.execute("UPDATE transactions SET transactions = ? WHERE pin_number = ?",
+                                               (transactions, security))
+                                connection.commit()
+                                print("£" + value + " successfully withdrawn.")
+                                break
+                            except ValueError:
+                                print("Please enter an appropriate value")
+
+                    elif input1 == "4":
+                        print("==Transactions==")
+                        connection = sqlite3.connect("123_banking.db")
+                        cursor = connection.cursor()
+                        cursor.execute("SELECT transactions FROM transactions WHERE pin_number = ? ", (security,))
+                        result = cursor.fetchall()
+                        result_list = tuple_sort(result)
+
+                        try:
+                            details_list = result_list[0].split("£")
+                            # remove empty string at index 0
+                            details_list.pop(0)
+                            # print each transaction in a separate list
+                            for details in details_list:
+                                print(["£" + details])
+                        except AttributeError:
+                            print("No recent transactions")
+
+                    elif input1 == "5":
+                        close_acc()
+
+                    elif input1 == "6":
+                        main()
+
+                    else:
+                        print("Invalid selection, please try again.")
+
+        attempts += 1
+        if attempts < 2:
+            print("Incorrect pin number, please try again. ({} attempt(s))".format(str(attempts)))
+        if attempts == 2:
+            print("Incorrect pin number, last attempt.")
+        if attempts == 3:
+            print("Authentication failed, returning to main menu...")
+            break
+
+
+def close_acc():
+    attempts = 0
+    while True:
+        security = input("Please enter pin number:\n")
+        connection = sqlite3.connect("123_banking.db")
+        cursor = connection.cursor()
+        cursor.execute("SELECT pin_number FROM customers")
+        result = cursor.fetchall()
+        result_list = tuple_sort(result)
+        for i in result_list:
+            if i == int(security):
+                cursor.execute("DELETE FROM customers WHERE pin_number = ? ", (security,))
+                cursor.execute("DELETE FROM transactions WHERE pin_number = ?", (security,))
+                assure = input("Are you sure you want to close your account?\n\n1) Yes\n2) No\n")
+                if assure == "1" or assure == "yes".lower():
+                    connection.commit()
+                    print("Account closure successful, returning to main menu...")
+                    main()
+                elif assure == "2" or assure == "no".lower():
+                    print("\nCancelling operation...\n\n")
+                    main()
+        else:
+            attempts += 1
+            if attempts < 2:
+                print("Incorrect pin number, please try again. ({} attempt(s))".format(str(attempts)))
+            if attempts == 2:
+                print("Incorrect pin number, last attempt.")
+            if attempts == 3:
+                print("Authentication failed, returning to main menu...")
+                break
+
+
+def main():
+    while True:
+        print("\n===123 Banking===")
+        print("Welcome to 123 Banking \n")
+        option1 = input("1) Access pre-existing account\n2) Create an account\n3) Close Account\n4) Quit\n")
+        if option1 == "1":
+            access()
+        elif option1 == "2":
+            sign_up()
+        elif option1 == "3":
+            close_acc()
+        elif option1 == "4":
+            break
+        elif option1 == "0000":
+            connection = sqlite3.connect("123_banking.db")
+            cursor = connection.cursor()
+            cursor.execute("SELECT * FROM customers")
+            result = cursor.fetchall()
+            result_list = tuple_sort(result)
+            print("Order: [ID, customer_no, first, last, card_no, start, exp, pin, funds]")
+            # separate result_list into separate lists containing items related to one customer
+            for i in range(1, len(result_list) + 1):
+                if i % 9 == 0:
+                    print(result_list[i-9:i])
+
+        else:
+            print("Please enter a valid option.")
+
+
+if __name__ == '__main__':
+    main()
